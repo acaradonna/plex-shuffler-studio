@@ -1,0 +1,56 @@
+{
+  "plex": {
+    "url": "http://localhost:32400",
+    "token": "$PLEX_TOKEN",
+    "timeout_seconds": 30
+  },
+  "schedule": {
+    "interval_minutes": 360,
+    "jitter_seconds": 60
+  },
+  "playlists": [
+    {
+      "name": "Animation Shuffle",
+      "description": "Shuffled shows with movie drops",
+      "tv": {
+        "library": "TV Shows",
+        "query": "genre=Animation",
+        "exclude_titles": ["*News*"],
+        "episode_filters": {
+          "unwatched_only": false,
+          "exclude_watched_days": 14,
+          "max_per_show": 50
+        },
+        "order": {
+          "strategy": "rounds",
+          "chunk_size": 1,
+          "seed": "daily"
+        }
+      },
+      "movies": {
+        "enabled": true,
+        "library": "Movies",
+        "query": "genre=Animation",
+        "collections_as_shows": true,
+        "include_collections": ["Pixar*"],
+        "ratio": {
+          "every_episodes": 6,
+          "max_movies": 12
+        },
+        "filters": {
+          "exclude_watched_days": 30
+        },
+        "order": {
+          "strategy": "rounds",
+          "chunk_size": 1,
+          "seed": "daily"
+        }
+      },
+      "output": {
+        "mode": "replace",
+        "limit_items": 400,
+        "chunk_size": 200
+      }
+    }
+  ]
+}

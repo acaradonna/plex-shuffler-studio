@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plex Shuffler Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="backdrop"></div>
+  <header class="hero">
+    <div class="hero-text">
+      <div class="badge">Playlist Studio</div>
+      <h1>Plex Shuffler Studio</h1>
+      <p>Build channel-style playlists that keep episodes in order, shuffle shows, and sprinkle in movies. No code. Just vibes.</p>
+      <div class="hero-actions">
+        <button id="connect-btn" class="btn primary">Connect to Plex</button>
+        <button id="refresh-libraries" class="btn ghost">Refresh libraries</button>
+      </div>
+      <div class="status-line">
+        <span class="status-dot" id="plex-status-dot"></span>
+        <span id="plex-status-text">Not connected</span>
+        <span class="status-meta" id="plex-status-meta"></span>
+      </div>
+    </div>
+    <div class="hero-card" data-animate>
+      <div class="hero-card-title">Tonight's lineup</div>
+      <div class="hero-wave">
+        <div class="wave-bar" style="--i:0"></div>
+        <div class="wave-bar" style="--i:1"></div>
+        <div class="wave-bar" style="--i:2"></div>
+        <div class="wave-bar" style="--i:3"></div>
+        <div class="wave-bar" style="--i:4"></div>
+        <div class="wave-bar" style="--i:5"></div>
+      </div>
+      <div class="hero-list">
+        <div class="hero-item">Adventure Time S02E04</div>
+        <div class="hero-item">Spirited Away (Movie)</div>
+        <div class="hero-item">Samurai Jack S01E08</div>
+        <div class="hero-item">Kiki's Delivery Service (Movie)</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="card" data-animate>
+      <div class="section-title">Connection</div>
+      <div class="two-col">
+        <div>
+          <label for="plex-url">Plex server URL</label>
+          <input id="plex-url" type="text" placeholder="http://localhost:32400">
+          <label for="plex-server-select">Plex server (from your account)</label>
+          <select id="plex-server-select">
+            <option value="">Connect to load servers</option>
+          </select>
+        </div>
+        <div class="note">
+          <p>Use the Connect button to authorize and save your Plex token. Your token is stored in your local config file.</p>
+          <div class="pill" id="auth-code-pill" hidden>Code: <span id="auth-code"></span></div>
+          <div class="pill alt" id="account-pill" hidden>Connected as <span id="account-name"></span></div>
+          <div class="pill alt" id="server-pill" hidden>Server: <span id="server-name"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" data-animate>
+      <div class="section-title">Playlist setup</div>
+      <div class="playlist-header">
+        <div class="playlist-select">
+          <label for="playlist-select">Playlist</label>
+          <select id="playlist-select"></select>
+        </div>
+        <div class="playlist-actions">
+          <button id="playlist-add" class="btn ghost">New playlist</button>
+          <button id="save-btn" class="btn primary">Save config</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h3>Details</h3>
+          <label for="playlist-name">Name</label>
+          <input id="playlist-name" type="text" placeholder="Saturday Morning Shuffle">
+
+          <label for="playlist-description">Description</label>
+          <textarea id="playlist-description" rows="3" placeholder="Describe the mood..."></textarea>
+
+          <label for="schedule-interval">Refresh interval (minutes)</label>
+          <input id="schedule-interval" type="number" min="0" step="1">
+
+          <label for="schedule-jitter">Jitter (seconds)</label>
+          <input id="schedule-jitter" type="number" min="0" step="1">
+        </div>
+
+        <div class="panel">
+          <h3>TV sources</h3>
+          <label for="tv-library">TV library</label>
+          <select id="tv-library"></select>
+
+          <div class="query-block" id="tv-query-block">
+            <div class="query-header">
+              <div>
+                <div class="query-title">Filters</div>
+                <div class="query-subtitle">Pick common fields or add a custom filter.</div>
+              </div>
+              <div class="query-mode" role="tablist" aria-label="TV query mode">
+                <button type="button" class="query-mode-btn" data-section="tv" data-mode="builder">Builder</button>
+                <button type="button" class="query-mode-btn" data-section="tv" data-mode="advanced">Advanced</button>
+              </div>
+            </div>
+            <div class="query-body">
+              <div class="query-builder" id="tv-query-builder"></div>
+              <div class="query-advanced" id="tv-query-advanced">
+                <label for="tv-query-advanced-input">Raw query string</label>
+                <input id="tv-query-advanced-input" type="text" placeholder="genre=Animation&unwatched=1">
+                <div class="helper">Used verbatim; switch to Builder to regenerate filters.</div>
+              </div>
+            </div>
+          </div>
+
+          <label for="tv-include">Include titles (one per line)</label>
+          <textarea id="tv-include" rows="3" placeholder="*Ghibli*"></textarea>
+
+          <label for="tv-exclude">Exclude titles (one per line)</label>
+          <textarea id="tv-exclude" rows="3" placeholder="*News*"></textarea>
+
+          <div class="inline-row">
+            <label class="checkbox">
+              <input id="tv-unwatched" type="checkbox">
+              <span>Unwatched only</span>
+            </label>
+            <label for="tv-exclude-days">Exclude watched in last (days)</label>
+            <input id="tv-exclude-days" type="number" min="0" step="1">
+          </div>
+
+          <label for="tv-max-per-show">Max episodes per show</label>
+          <input id="tv-max-per-show" type="number" min="0" step="1">
+        </div>
+
+        <div class="panel">
+          <h3>Shuffle order</h3>
+          <label for="tv-strategy">Strategy</label>
+          <select id="tv-strategy">
+            <option value="rounds">Shuffle every round</option>
+            <option value="round_robin">Round robin</option>
+            <option value="random">Pure random</option>
+          </select>
+
+          <label for="tv-chunk">Episodes per show</label>
+          <input id="tv-chunk" type="number" min="1" step="1">
+
+          <label for="tv-seed">Seed</label>
+          <input id="tv-seed" type="text" placeholder="daily">
+
+          <div class="divider"></div>
+
+          <h3>Output</h3>
+          <label for="output-mode">Mode</label>
+          <select id="output-mode">
+            <option value="replace">Replace</option>
+            <option value="append">Append</option>
+          </select>
+
+          <label for="output-limit">Max items</label>
+          <input id="output-limit" type="number" min="0" step="1">
+
+          <label for="output-chunk">Chunk size</label>
+          <input id="output-chunk" type="number" min="50" step="10">
+        </div>
+
+        <div class="panel">
+          <h3>Movie inserts</h3>
+          <label class="checkbox">
+            <input id="movies-enabled" type="checkbox">
+            <span>Enable movies</span>
+          </label>
+
+          <label for="movies-library">Movies library</label>
+          <select id="movies-library"></select>
+
+          <div class="query-block" id="movies-query-block">
+            <div class="query-header">
+              <div>
+                <div class="query-title">Filters</div>
+                <div class="query-subtitle">Pick common fields or add a custom filter.</div>
+              </div>
+              <div class="query-mode" role="tablist" aria-label="Movie query mode">
+                <button type="button" class="query-mode-btn" data-section="movies" data-mode="builder">Builder</button>
+                <button type="button" class="query-mode-btn" data-section="movies" data-mode="advanced">Advanced</button>
+              </div>
+            </div>
+            <div class="query-body">
+              <div class="query-builder" id="movies-query-builder"></div>
+              <div class="query-advanced" id="movies-query-advanced">
+                <label for="movies-query-advanced-input">Raw query string</label>
+                <input id="movies-query-advanced-input" type="text" placeholder="genre=Animation">
+                <div class="helper">Used verbatim; switch to Builder to regenerate filters.</div>
+              </div>
+            </div>
+          </div>
+
+          <label class="checkbox">
+            <input id="movies-collections" type="checkbox">
+            <span>Treat collections as shows</span>
+          </label>
+
+          <label for="movies-include-collections">Include collections</label>
+          <textarea id="movies-include-collections" rows="2" placeholder="Pixar*"></textarea>
+
+          <label for="movies-exclude-collections">Exclude collections</label>
+          <textarea id="movies-exclude-collections" rows="2" placeholder="Disney*"></textarea>
+
+          <div class="inline-row">
+            <label for="movies-every">Insert 1 movie every N episodes</label>
+            <input id="movies-every" type="number" min="0" step="1">
+          </div>
+
+          <label for="movies-max">Max movies per refresh</label>
+          <input id="movies-max" type="number" min="0" step="1">
+
+          <div class="inline-row">
+            <label class="checkbox">
+              <input id="movies-unwatched" type="checkbox">
+              <span>Unwatched only</span>
+            </label>
+            <label for="movies-exclude-days">Exclude watched in last (days)</label>
+            <input id="movies-exclude-days" type="number" min="0" step="1">
+          </div>
+
+          <label for="movies-strategy">Movie shuffle strategy</label>
+          <select id="movies-strategy">
+            <option value="rounds">Shuffle every round</option>
+            <option value="round_robin">Round robin</option>
+            <option value="random">Pure random</option>
+          </select>
+
+          <label for="movies-chunk">Movies per group</label>
+          <input id="movies-chunk" type="number" min="1" step="1">
+
+          <label for="movies-seed">Movie seed</label>
+          <input id="movies-seed" type="text" placeholder="weekly">
+        </div>
+      </div>
+    </section>
+
+    <section class="card" data-animate>
+      <div class="section-title">Preview</div>
+      <div class="preview-actions">
+        <button id="preview-btn" class="btn ghost">Preview</button>
+        <button id="run-btn" class="btn primary">Generate playlist</button>
+      </div>
+      <div class="preview-meta" id="preview-meta">Nothing generated yet.</div>
+      <div class="preview-list" id="preview-list"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
