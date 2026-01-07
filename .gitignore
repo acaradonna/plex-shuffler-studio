@@ -6,3 +6,6 @@
 config.json
 plex_shuffler_web.log
 .pytest_cache/
+
+__pycache__/
+*.pyc
