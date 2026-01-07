@@ -8,14 +8,6 @@ This file tracks what's being worked on **right now**. Keep it small (max 1-3 it
 
 ## Now (Work in Progress)
 
-*(empty — pick from Next)*
-
-### T009: Cleanup monorepo + rename/init plex-shuffler-studio repo
-- **From:** User request 2026-01-07
-- **Owner:** Codex
-- **Started:** 2026-01-07
-- **Goal:** Remove accidental parent monorepo, rename `plex-shuffler-studio` folder, initialize git + remote, and audit other projects for missing repos/remotes.
-- **Acceptance:** Parent `.git` removed or archived per user confirmation, `plex-shuffler-studio` has a clean git repo with remote set, and audit report delivered for other folders.
 
 ---
 
@@ -35,6 +27,18 @@ This file tracks what's being worked on **right now**. Keep it small (max 1-3 it
 - **From:** BACKLOG.md B004
 - **Goal:** Config errors include context (field name, available options).
 - **Acceptance:** README has "Troubleshooting" section with examples.
+
+---
+
+## Blocked
+
+### T009: Cleanup monorepo + rename/init plex-shuffler-studio repo
+- **From:** User request 2026-01-07
+- **Owner:** Codex
+- **Started:** 2026-01-07
+- **Goal:** Remove accidental parent monorepo, rename `plex-shuffler-studio` folder, initialize git + remote, and audit other projects for missing repos/remotes.
+- **Acceptance:** Parent `.git` removed or archived per user confirmation, `plex-shuffler-studio` has a clean git repo with remote set, and audit report delivered for other folders.
+- **Blocked:** GitHub repo `acaradonna/harmony` already exists; need decision to merge or force-push local history.
 
 ---
 
