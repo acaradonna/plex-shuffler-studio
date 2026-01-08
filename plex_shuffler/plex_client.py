@@ -21,11 +21,27 @@ class PlexError(RuntimeError):
 
 
 class PlexClient:
-    def __init__(self, base_url: str, token: str, timeout: int = 30) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        timeout: int = 30,
+        client_identifier: str = "plex-shuffler-studio",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
+        self.client_identifier = client_identifier
         self._machine_identifier: str | None = None
+
+    @staticmethod
+    def _truncate_body(body: str, limit: int = 800) -> str:
+        if not body:
+            return ""
+        text = body.strip()
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "…"
 
     def _request(
         self,
@@ -41,7 +57,7 @@ class PlexClient:
             "X-Plex-Token": self.token,
             "X-Plex-Product": "Plex Shuffler Studio",
             "X-Plex-Version": __version__,
-            "X-Plex-Client-Identifier": "plex-shuffler-studio",
+            "X-Plex-Client-Identifier": self.client_identifier,
             "Accept": "application/xml",
         }
 
@@ -51,6 +67,7 @@ class PlexClient:
                 data = response.read()
         except HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            body = self._truncate_body(body)
             raise PlexError(f"Plex API error {exc.code} for {url}: {body}") from exc
         except URLError as exc:
             raise PlexError(f"Plex API connection error for {url}: {exc}") from exc
@@ -60,6 +77,49 @@ class PlexClient:
         except ET.ParseError as exc:
             snippet = data[:200].decode("utf-8", errors="replace")
             raise PlexError(f"Invalid Plex API response from {url}: {snippet}") from exc
+
+    def _request_pages(
+        self,
+        path: str,
+        params: list[tuple[str, str]] | None = None,
+        page_size: int = 200,
+    ) -> list[ET.Element]:
+        """Fetch one or more pages for a Plex container response.
+
+        Plex supports pagination via query params:
+        - X-Plex-Container-Start
+        - X-Plex-Container-Size
+        """
+
+        start = 0
+        pages: list[ET.Element] = []
+        while True:
+            page_params: list[tuple[str, str]] = list(params or [])
+            page_params.append(("X-Plex-Container-Start", str(start)))
+            page_params.append(("X-Plex-Container-Size", str(page_size)))
+            root = self._request(path, params=page_params)
+            pages.append(root)
+
+            total_raw = root.attrib.get("totalSize") or root.attrib.get("size")
+            try:
+                total = int(total_raw) if total_raw else 0
+            except ValueError:
+                total = 0
+            if total <= 0:
+                break
+
+            size_raw = root.attrib.get("size")
+            try:
+                size = int(size_raw) if size_raw else 0
+            except ValueError:
+                size = 0
+            if size <= 0:
+                break
+
+            start += size
+            if start >= total:
+                break
+        return pages
 
     def _get_machine_identifier(self) -> str:
         if self._machine_identifier:
@@ -99,42 +159,42 @@ class PlexClient:
         params = [("type", "2")]
         if query:
             params.extend(query)
-        root = self._request(f"/library/sections/{section_key}/all", params=params)
         shows = []
-        for entry in root.findall("Directory"):
-            if entry.attrib.get("type") != "show":
-                continue
-            shows.append(
-                MediaItem(
-                    rating_key=entry.attrib.get("ratingKey", ""),
-                    title=entry.attrib.get("title", ""),
-                    type="show",
+        for root in self._request_pages(f"/library/sections/{section_key}/all", params=params):
+            for entry in root.findall("Directory"):
+                if entry.attrib.get("type") != "show":
+                    continue
+                shows.append(
+                    MediaItem(
+                        rating_key=entry.attrib.get("ratingKey", ""),
+                        title=entry.attrib.get("title", ""),
+                        type="show",
+                    )
                 )
-            )
         return shows
 
     def get_show_episodes(self, show_key: str, query: list[tuple[str, str]] | None = None) -> list[MediaItem]:
         params = []
         if query:
             params.extend(query)
-        root = self._request(f"/library/metadata/{show_key}/allLeaves", params=params)
         episodes = []
-        for entry in root.findall("Video"):
-            if entry.attrib.get("type") != "episode":
-                continue
-            episodes.append(self._parse_episode(entry))
+        for root in self._request_pages(f"/library/metadata/{show_key}/allLeaves", params=params):
+            for entry in root.findall("Video"):
+                if entry.attrib.get("type") != "episode":
+                    continue
+                episodes.append(self._parse_episode(entry))
         return episodes
 
     def get_movies(self, section_key: str, query: list[tuple[str, str]] | None = None) -> list[MediaItem]:
         params = [("type", "1")]
         if query:
             params.extend(query)
-        root = self._request(f"/library/sections/{section_key}/all", params=params)
         movies = []
-        for entry in root.findall("Video"):
-            if entry.attrib.get("type") != "movie":
-                continue
-            movies.append(self._parse_movie(entry))
+        for root in self._request_pages(f"/library/sections/{section_key}/all", params=params):
+            for entry in root.findall("Video"):
+                if entry.attrib.get("type") != "movie":
+                    continue
+                movies.append(self._parse_movie(entry))
         return movies
 
     def get_collections(self, section_key: str, query: list[tuple[str, str]] | None = None) -> list[MediaItem]:
@@ -142,34 +202,35 @@ class PlexClient:
         if query:
             params.extend(query)
         try:
-            root = self._request(f"/library/sections/{section_key}/collections", params=params)
+            roots = self._request_pages(f"/library/sections/{section_key}/collections", params=params)
         except PlexError as exc:
             LOGGER.warning("Collections endpoint failed, retrying with fallback: %s", exc)
             fallback_params = list(params) + [("type", "18")]
-            root = self._request(f"/library/sections/{section_key}/all", params=fallback_params)
+            roots = self._request_pages(f"/library/sections/{section_key}/all", params=fallback_params)
         collections = []
-        for entry in root.findall("Directory"):
-            if entry.attrib.get("type") not in {"collection", "collectionGroup"}:
-                continue
-            collections.append(
-                MediaItem(
-                    rating_key=entry.attrib.get("ratingKey", ""),
-                    title=entry.attrib.get("title", ""),
-                    type="collection",
+        for root in roots:
+            for entry in root.findall("Directory"):
+                if entry.attrib.get("type") not in {"collection", "collectionGroup"}:
+                    continue
+                collections.append(
+                    MediaItem(
+                        rating_key=entry.attrib.get("ratingKey", ""),
+                        title=entry.attrib.get("title", ""),
+                        type="collection",
+                    )
                 )
-            )
         return collections
 
     def get_collection_items(self, collection_key: str) -> list[MediaItem]:
-        root = self._request(f"/library/metadata/{collection_key}/children")
         items = []
-        for entry in root.findall("Video"):
-            if entry.attrib.get("type") != "movie":
-                continue
-            items.append(self._parse_movie(entry))
+        for root in self._request_pages(f"/library/metadata/{collection_key}/children"):
+            for entry in root.findall("Video"):
+                if entry.attrib.get("type") != "movie":
+                    continue
+                items.append(self._parse_movie(entry))
         return items
 
-    def get_filter_options(
+    def _get_section_facet_values(
         self,
         section_key: str,
         source: str,
@@ -191,6 +252,26 @@ class PlexClient:
                     key=str.lower,
                 )
             raise
+
+    def get_filter_options(
+        self,
+        section_key: str,
+        source: str,
+        media_type: str | None = None,
+    ) -> list[str]:
+        return self._get_section_facet_values(section_key, source, media_type)
+
+    def get_section_facet_values(
+        self,
+        section_key: str,
+        facet: str,
+        media_type: str | None = None,
+    ) -> list[str]:
+        """Return tag values for a section facet (genre, collection, etc.)."""
+        source = normalize_facet_source(facet)
+        if not source:
+            raise PlexError(f"Unsupported facet: {facet}")
+        return self._get_section_facet_values(section_key=section_key, source=source, media_type=media_type)
 
     def get_playlists(self, title: str | None = None) -> list[PlaylistInfo]:
         params: list[tuple[str, str]] = []
@@ -280,6 +361,33 @@ def _parse_date(value: str | None) -> dt.date | None:
         return dt.date.fromisoformat(value)
     except ValueError:
         return None
+
+
+_FACET_SOURCE_ALIASES: dict[str, str] = {
+    "genre": "genre",
+    "collection": "collection",
+    "contentrating": "contentRating",
+    "content_rating": "contentRating",
+    "studio": "studio",
+    "label": "label",
+    "actor": "actor",
+    "director": "director",
+}
+
+
+def normalize_facet_source(facet: str) -> str | None:
+    """Normalize a facet name to a Plex tag directory source."""
+    cleaned = facet.strip()
+    if cleaned.lower().startswith("plex:"):
+        cleaned = cleaned.split(":", 1)[1].strip()
+    if not cleaned:
+        return None
+    return _FACET_SOURCE_ALIASES.get(cleaned.lower())
+
+
+def supported_facet_sources() -> list[str]:
+    """Return the canonical facet source names supported by the client."""
+    return sorted(set(_FACET_SOURCE_ALIASES.values()), key=str.lower)
 
 
 def _media_type_param(media_type: str) -> str | None:
