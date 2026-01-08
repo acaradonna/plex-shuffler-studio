@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 import uuid
+from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,7 +23,12 @@ from plex_shuffler.config import (
     save_config,
 )
 from plex_shuffler.plex_auth import PlexAuthError, check_pin, create_pin, fetch_resources, fetch_user
-from plex_shuffler.plex_client import PlexClient, PlexError
+from plex_shuffler.plex_client import (
+    PlexClient,
+    PlexError,
+    normalize_facet_source,
+    supported_facet_sources,
+)
 from plex_shuffler.playlist import sync_playlist
 from plex_shuffler.query_builder import (
     DEFAULT_KNOWN_FIELDS,
@@ -38,10 +44,38 @@ LOGGER = logging.getLogger(__name__)
 
 
 class WebApp:
-    def __init__(self, config_path: str, web_root: str) -> None:
+    def __init__(
+        self,
+        config_path: str,
+        web_root: str,
+        plex_client_factory: Callable[[dict[str, Any]], PlexClient] | None = None,
+    ) -> None:
         self.config_path = Path(config_path)
         self.web_root = Path(web_root)
         self._lock = threading.Lock()
+        self._facet_cache: dict[tuple[str, str], list[str]] = {}
+        self._plex_client_factory = plex_client_factory
+
+    def create_plex_client(self, plex_cfg: dict[str, Any]) -> PlexClient:
+        """Create a PlexClient from config or a test override."""
+        if self._plex_client_factory:
+            return self._plex_client_factory(plex_cfg)
+        return PlexClient(
+            base_url=plex_cfg.get("url", ""),
+            token=plex_cfg.get("token", ""),
+            timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
+            client_identifier=(plex_cfg.get("client_id") or "plex-shuffler-studio").strip() or "plex-shuffler-studio",
+        )
+
+    def get_cached_facet_values(self, section_key: str, facet: str) -> list[str] | None:
+        """Return cached facet values for a section/facet pair."""
+        with self._lock:
+            return self._facet_cache.get((section_key, facet))
+
+    def set_cached_facet_values(self, section_key: str, facet: str, values: list[str]) -> None:
+        """Store facet values for a section/facet pair."""
+        with self._lock:
+            self._facet_cache[(section_key, facet)] = list(values)
 
     def load_config_raw(self) -> dict[str, Any]:
         return load_config_raw(str(self.config_path))
@@ -88,6 +122,16 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
     def _handle_api_get(self, parsed) -> None:
         path = parsed.path
         query = parse_qs(parsed.query)
+
+        limit_raw = (query.get("limit", [""])[0] or "").strip()
+        limit: int | None = None
+        if limit_raw:
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                self._send_json({"error": "Invalid limit"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            limit = max(1, min(200, limit))
         if path == "/api/config":
             app = self._app
             config = app.get_config_for_api()
@@ -169,11 +213,7 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             if not plex_cfg.get("token"):
                 self._send_json({"error": "Plex token not set"}, status=HTTPStatus.BAD_REQUEST)
                 return
-            client = PlexClient(
-                base_url=plex_cfg.get("url", ""),
-                token=plex_cfg.get("token", ""),
-                timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
-            )
+            client = self._app.create_plex_client(plex_cfg)
             try:
                 section = client.get_section_by_title(library)
                 options = client.get_filter_options(
@@ -184,6 +224,8 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             except PlexError as exc:
                 self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_GATEWAY)
                 return
+            if limit is not None:
+                options = list(options)[:limit]
             self._send_json({"options": options})
             return
 
@@ -222,6 +264,42 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             self._send_json({"pin_id": pin_id, "authorized": bool(pin.auth_token), "token_saved": token_saved})
             return
 
+        if path == "/api/facets":
+            section_title = (query.get("section_title", [""])[0] or "").strip()
+            section_key = (query.get("section_key", [""])[0] or "").strip()
+            facet = (query.get("facet", [""])[0] or "").strip()
+            if not facet:
+                self._send_json({"values": [], "error": "facet is required"})
+                return
+            if section_key:
+                self._handle_facets_by_key(section_key, facet, limit=limit)
+                return
+            if not section_title:
+                self._send_json({"values": [], "error": "section_title or section_key is required"})
+                return
+            client, error = self._build_plex_client()
+            if error:
+                self._send_json({"values": [], "error": error})
+                return
+            try:
+                section = client.get_section_by_title(section_title)
+            except PlexError as exc:
+                self._send_json({"values": [], "error": str(exc)})
+                return
+            self._handle_facets_by_key(section.key, facet, client=client, limit=limit)
+            return
+
+        if path.startswith("/api/libraries/") and "/facets/" in path:
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "libraries" and parts[3] == "facets":
+                section_key = parts[2]
+                facet = parts[4]
+                if not section_key or not facet:
+                    self._send_json({"values": [], "error": "section_key and facet are required"})
+                    return
+                self._handle_facets_by_key(section_key, facet, limit=limit)
+                return
+
         if path == "/api/libraries":
             try:
                 config = load_config(str(self._app.config_path))
@@ -232,11 +310,7 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             if not plex_cfg.get("token"):
                 self._send_json({"error": "Plex token not set"}, status=HTTPStatus.BAD_REQUEST)
                 return
-            client = PlexClient(
-                base_url=plex_cfg.get("url", ""),
-                token=plex_cfg.get("token", ""),
-                timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
-            )
+            client = self._app.create_plex_client(plex_cfg)
             try:
                 sections = client.get_sections()
             except PlexError as exc:
@@ -328,11 +402,7 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             if not plex_cfg.get("token"):
                 self._send_json({"error": "Plex token not set"}, status=HTTPStatus.BAD_REQUEST)
                 return
-            client = PlexClient(
-                base_url=plex_cfg.get("url", ""),
-                token=plex_cfg.get("token", ""),
-                timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
-            )
+            client = self._app.create_plex_client(plex_cfg)
             try:
                 items, stats = build_playlist_items(client, playlists[playlist_index], now_utc())
             except PlexError as exc:
@@ -371,11 +441,7 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             if not plex_cfg.get("token"):
                 self._send_json({"error": "Plex token not set"}, status=HTTPStatus.BAD_REQUEST)
                 return
-            client = PlexClient(
-                base_url=plex_cfg.get("url", ""),
-                token=plex_cfg.get("token", ""),
-                timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
-            )
+            client = self._app.create_plex_client(plex_cfg)
             playlist_cfg = playlists[playlist_index]
             name = playlist_cfg.get("name", "")
             output_cfg = playlist_cfg.get("output", {})
@@ -402,6 +468,62 @@ class PlexShufflerHandler(BaseHTTPRequestHandler):
             return
 
         self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+
+    def _build_plex_client(self) -> tuple[PlexClient | None, str | None]:
+        try:
+            config = load_config(str(self._app.config_path))
+        except (OSError, ValueError) as exc:
+            return None, str(exc)
+        plex_cfg = config.get("plex", {})
+        if not plex_cfg.get("token"):
+            return None, "Plex token not set"
+        return self._app.create_plex_client(plex_cfg), None
+
+    def _handle_facets_by_key(
+        self,
+        section_key: str,
+        facet: str,
+        *,
+        media_type: str | None = None,
+        limit: int | None = None,
+        client: PlexClient | None = None,
+    ) -> None:
+        facet_source = normalize_facet_source(facet)
+        if not facet_source:
+            supported = ", ".join(supported_facet_sources())
+            self._send_json(
+                {
+                    "values": [],
+                    "error": f"Unsupported facet '{facet}'. Supported: {supported}.",
+                }
+            )
+            return
+        cached = self._app.get_cached_facet_values(section_key, facet_source)
+        if cached is not None:
+            values = cached
+            if limit is not None:
+                values = cached[:limit]
+            self._send_json({"values": values})
+            return
+        if client is None:
+            client, error = self._build_plex_client()
+            if error:
+                self._send_json({"values": [], "error": error})
+                return
+        try:
+            values = client.get_section_facet_values(
+                section_key=section_key,
+                facet=facet_source,
+                media_type=media_type,
+            )
+        except PlexError as exc:
+            self._send_json({"values": [], "error": str(exc)})
+            return
+        values = _normalize_facet_values(values)
+        self._app.set_cached_facet_values(section_key, facet_source, values)
+        if limit is not None:
+            values = values[:limit]
+        self._send_json({"values": values})
 
     def _serve_static(self, path: str) -> None:
         if path == "/":
@@ -457,6 +579,11 @@ class PlexShufflerWebServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], handler_class: type[PlexShufflerHandler], app: WebApp):
         super().__init__(server_address, handler_class)
         self.app = app
+
+
+def _normalize_facet_values(values: list[str]) -> list[str]:
+    cleaned = [value.strip() for value in values if isinstance(value, str) and value.strip()]
+    return sorted(set(cleaned), key=str.lower)
 
 
 def _guess_type(suffix: str) -> str:
