@@ -113,6 +113,23 @@ This file contains all known work items, grouped by priority. New items go to "D
 
 ## Discovered (Newly Found Work — Needs Triage)
 
+### B019: Add facets API for library tag values (genres, collections, etc.)
+- **Source:** UI query builder follow-up
+- **Priority:** TBD
+- **Outcome:** Web API can return sorted unique facet values for a chosen library, with caching and graceful errors for UI checkboxes.
+- **Acceptance Criteria:**
+  - API supports `GET /api/facets?section_title=...&facet=genre` and/or `GET /api/libraries/{sectionKey}/facets/{facet}`.
+  - Responses are a list of unique names (strings), sorted for display.
+  - Errors return an empty list plus a helpful error message (UI can fallback).
+  - In-memory caching avoids repeated Plex calls per (section, facet).
+  - Tests cover endpoint shape and caching without a live Plex server.
+
+### B018: Validate remaining query catalog fields (summary/actor/director)
+- **Source:** Query builder follow-up
+- **Priority:** TBD
+- **Outcome:** Confirm Plex mappings for summary/actor/director (including ID vs name requirements) and promote verified fields into the catalog.
+- **Notes:** Actor filters may require tag IDs; validate with Plex API before exposing in the builder.
+
 ### B017: Add query field catalog + custom filters in web UI
 - **Source:** User request
 - **Priority:** TBD

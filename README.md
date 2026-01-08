@@ -15,6 +15,23 @@ A fast, configurable playlist builder for Plex that shuffles shows while keeping
 - Python 3.10+
 - Plex server URL + Plex token
 
+## Install (optional)
+
+If you want a `plex-shuffler-studio` command on your PATH, install the project into a virtual environment:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -U pip
+python -m pip install .
+```
+
+Then you can run:
+
+```bash
+plex-shuffler-studio --config config.json --help
+```
+
 ## Quick start
 
 1) Create a config file:
@@ -81,25 +98,25 @@ A fast, configurable playlist builder for Plex that shuffles shows while keeping
 2) List libraries:
 
 ```bash
-python -m plex_shuffler --config config.json libraries
+python3 -m plex_shuffler --config config.json libraries
 ```
 
 3) Run once (dry-run + preview):
 
 ```bash
-python -m plex_shuffler --config config.json run --dry-run --print 20
+python3 -m plex_shuffler --config config.json run --dry-run --print 20
 ```
 
 4) Run and sync playlists:
 
 ```bash
-python -m plex_shuffler --config config.json run
+python3 -m plex_shuffler --config config.json run
 ```
 
 5) Run continuously using the schedule in config:
 
 ```bash
-python -m plex_shuffler --config config.json run --loop
+python3 -m plex_shuffler --config config.json run --loop
 ```
 
 ## Web UI
@@ -107,12 +124,12 @@ python -m plex_shuffler --config config.json run --loop
 Launch the web UI for a non-code setup flow:
 
 ```bash
-python -m plex_shuffler.web --config config.json --host 127.0.0.1 --port 8181
+python3 -m plex_shuffler.web --config config.json --host 127.0.0.1 --port 8181
 ```
 
 Then open `http://127.0.0.1:8181` in your browser. Use the Connect button to authorize Plex in a new tab. The UI saves your token to `config.json` and lets you configure playlists, preview, and generate.
 
-The query builder exposes a curated catalog of common Plex fields (genre, unwatched, year, collection, content rating, studio), plus a Custom filter escape hatch for any raw key/value. Multiselect fields load options from Plex when a library is selected, and you can add "Other..." values that persist. Switch to Advanced mode to paste a raw query string; it is used verbatim.
+The query builder exposes a curated catalog of common Plex fields (genre, unwatched, year with >=/<=, title contains, collection, content rating, studio), plus a Custom filter escape hatch for any raw key/value. Multiselect fields load options from Plex when a library is selected, and you can add "Other..." values that persist. Switch to Advanced mode to paste a raw query string; it is used verbatim.
 
 ## Configuration details
 
@@ -151,5 +168,5 @@ The query builder exposes a curated catalog of common Plex fields (genre, unwatc
 ## Notes
 
 - Plex query strings accept advanced filters. If you already use smart playlists, you can reuse those filter parameters here.
-- For automation without `--loop`, run `python -m plex_shuffler --config config.json run` on cron or a systemd timer.
+- For automation without `--loop`, run `python3 -m plex_shuffler --config config.json run` on cron or a systemd timer.
 - The web UI may store optional `query_state` alongside `tv.query`/`movies.query` for query-builder round-tripping; the CLI ignores it.

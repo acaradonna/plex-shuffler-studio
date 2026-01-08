@@ -9,9 +9,14 @@ This file tracks all user-visible changes to the Plex Shuffler Studio project. F
 ## [Unreleased]
 
 ### Added
+- Python packaging via `pyproject.toml`, including a `plex-shuffler-studio` console script.
+- Query builder now supports title filters and year range operators (>=, <=).
 - Documentation system (AGENTS.md, PLAN.md, BACKLOG.md, TASKS.md, CHANGELOG.md, NOTES.md) to coordinate agent collaboration and track work.
 - Web config API now includes optional `query_state` for TV/movie queries, with parsing/serialization helpers for UI round-tripping.
 - Web UI query builder with curated field catalog, custom filters, and Plex-backed option loading for multiselect fields.
+- Web API endpoints for library facet values (genres/collections/etc.) with in-memory caching and graceful error fallback.
+- Optional `limit` support for Plex-backed query option/facet endpoints to enable top-N prepopulation.
+- Actor/director fields are now available in the query builder catalog.
 
 ### Changed
 - Web UI preview/run actions now show in-progress states instead of only a save toast.
@@ -19,6 +24,12 @@ This file tracks all user-visible changes to the Plex Shuffler Studio project. F
 
 ### Fixed
 - Playlist creation now handles Plex `/identity` responses that expose `machineIdentifier` on the root element.
+- CLI no longer loops unless `--loop` is provided (even if `schedule.interval_minutes` is set).
+- Plex library queries now paginate to support large libraries.
+- Config validation now catches more invalid values early (enum/range checks) with clearer field-scoped errors.
+
+### Changed
+- Plex requests now use `plex.client_id` (when set) as the `X-Plex-Client-Identifier` header.
 
 ### Removed
 - *(none yet)*

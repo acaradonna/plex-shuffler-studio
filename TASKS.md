@@ -9,19 +9,7 @@ This file tracks what's being worked on **right now**. Keep it small (max 1-3 it
 ## Now (Work in Progress)
 
 
----
-
 ## Next (Ready Queue — Pick from here next)
-
-### T002: Add basic test coverage for shuffle.py
-- **From:** BACKLOG.md B001
-- **Goal:** Unit tests for round-robin and weighted shuffle strategies.
-- **Acceptance:** Tests pass with `python -m pytest tests/test_shuffle.py`.
-
-### T003: Add pyproject.toml with packaging metadata
-- **From:** BACKLOG.md B003
-- **Goal:** Project can be installed with `pip install .` and has CLI entrypoint.
-- **Acceptance:** User can run `plex-shuffler-studio --help` after install.
 
 ### T004: Improve config validation error messages
 - **From:** BACKLOG.md B004
@@ -43,6 +31,41 @@ This file tracks what's being worked on **right now**. Keep it small (max 1-3 it
 ---
 
 ## Done (Last 20 Items — Rolling History)
+
+### T014: Add top-N Plex-backed query options
+- **Completed:** 2026-01-08
+- **Outcome:** Added optional `limit` support to Plex-backed query options + facets endpoints, updated the web UI to request a default top-N, and promoted actor/director fields so they appear in the query builder.
+- **Notes:** Facet caching remains keyed independent of `limit`; responses are sliced after cache.
+
+### T003: Add pyproject.toml with packaging metadata
+- **Completed:** 2026-01-07
+- **Outcome:** Added `pyproject.toml` packaging metadata and a `plex-shuffler-studio` console script; web UI static assets are included as package data.
+- **Notes:** Install into a venv and run `plex-shuffler-studio --help`.
+
+### T002: Add basic test coverage for shuffle.py
+- **Completed:** 2026-01-07
+- **Outcome:** Added unit tests for shuffle strategies (`rounds`, `round_robin`, `random`) and movie interleaving behavior.
+- **Notes:** See `tests/test_shuffle.py`.
+
+### T013: Improve config validation error messages
+- **Completed:** 2026-01-07
+- **Outcome:** Expanded `validate_config` with enum/range/type checks and improved field-scoped error messages; added unit tests to lock behavior.
+- **Notes:** See `tests/test_config_validation.py` for coverage.
+
+### T012: Fix CLI loop behavior + Plex client robustness
+- **Completed:** 2026-01-07
+- **Outcome:** CLI `run` no longer loops unless `--loop` is provided; Plex client now paginates large library queries and uses configured `plex.client_id` as the client identifier.
+- **Notes:** Added tests for CLI loop behavior and Plex pagination/client identifier.
+
+### T011: Add facets API endpoints for library tag values
+- **Completed:** 2026-01-07
+- **Outcome:** Added facets endpoints with caching, Plex client helper, and tests using a fake client seam.
+- **Notes:** See NOTES.md D010 for Plex endpoint assumptions.
+
+### T010: Validate Plex query mappings + add year range/title filters
+- **Completed:** 2026-01-07
+- **Outcome:** Verified title filter + year range ops and updated builder parsing/serialization with operator UI support.
+- **Notes:** Actor/director/summary remain pending per NOTES.md D009.
 
 ### T008: Implement query field catalog + custom filters in web UI
 - **Completed:** 2026-01-07
@@ -109,4 +132,4 @@ This file tracks what's being worked on **right now**. Keep it small (max 1-3 it
 
 ---
 
-**Next action:** Complete T001 (this file + 5 others), then move to T002 (tests).
+**Next action:** Pick one task from "Next" and move it to "Now".

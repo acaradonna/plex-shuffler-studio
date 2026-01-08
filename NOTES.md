@@ -1,6 +1,6 @@
 # NOTES.md — Engineering Decision Log
 
-**Last updated:** 2026-01-07
+**Last updated:** 2026-01-08
 
 This file captures design decisions, investigations, and gotchas so agents don't re-litigate past choices or repeat mistakes.
 
@@ -134,9 +134,53 @@ This file captures design decisions, investigations, and gotchas so agents don't
 - **Trade-offs:**
   - Some common fields are only available via Custom or Advanced until validation.
   - Builder feature set is intentionally conservative in v1.
-- **Status:** Active (Web UI).
+- **Status:** Superseded by D009.
 
 ---
+
+
+### D009: Validate title + year range filters for builder
+- **Date:** 2026-01-07
+- **Decision:** Promote `title` and year range operators (>=, <=) to verified fields in the query builder; keep `summary`, `actor`, and `director` pending until Plex mappings are confirmed.
+- **Rationale:**
+  - Plexopedia documents `year>=`/`year<=` filters and partial matching via `=` for string fields.
+  - PlexAPI docs show `title=...` as a working filter example, but `actor` is noted as ID-based and unverified.
+- **Alternatives considered:**
+  - **Promote all text/tag fields now:** Higher risk of shipping filters that require IDs or unsupported ops.
+  - **Keep year range hidden:** Blocks common use cases like "2010+" without Advanced mode.
+- **Trade-offs:**
+  - Title filter assumes Plex treats `title=...` as contains; actual behavior may vary by server metadata.
+  - Actor/director are exposed in the builder catalog, but Plex behavior can vary (e.g., some servers may require IDs rather than names).
+- **Status:** Active (Web UI).
+
+### D012: Top-N prepopulation for Plex-backed option lists
+- **Date:** 2026-01-08
+- **Decision:** Support optional `limit` on Plex-backed option/facet endpoints and slice results after normalization/caching.
+- **Rationale:**
+  - Keeps UI pickers fast and usable without loading thousands of tag values.
+  - Avoids polluting caches with many limit variants (cache stores full normalized list; responses slice after cache).
+- **Trade-offs:**
+  - Users may not see rare values in the picker without switching to Custom/Advanced.
+- **Status:** Active (Web UI).
+
+### D010: Facet lookups use Plex tag directories per section
+- **Date:** 2026-01-07
+- **Decision:** Fetch facet values (genre, collection, contentRating, studio, actor, director) from `/library/sections/{key}/{facet}` tag endpoints, mapping `content_rating`/`contentRating` to Plex's `contentRating` path.
+- **Rationale:**
+  - Keeps responses small (tag listings only, no full library scan).
+  - Aligns with Plex's tag directory endpoints used by smart filters.
+- **Alternatives considered:**
+  - **Scan `/library/sections/{key}/all` and aggregate tags:** Too heavy for large libraries.
+  - **Use only `/library/sections/{key}/collections`:** Doesn't cover non-collection facets.
+- **Trade-offs:**
+  - Relies on Plex tag endpoints being available; collection uses the existing `/collections` fallback in the Plex client.
+- **Status:** Active (Web UI).
+
+### D011: Package web UI assets as package data
+- **Date:** 2026-01-07
+- **Decision:** Include `plex_shuffler/web/*` in Python package data so the web UI continues to work when installed from a wheel/sdist.
+- **Rationale:** `run_web_server()` serves static assets from `Path(__file__).parent / "web"`, which must exist in installed distributions.
+- **Status:** Active (Packaging).
 
 ## Investigations
 
@@ -145,7 +189,7 @@ This file captures design decisions, investigations, and gotchas so agents don't
 - **Finding:** Plex API doesn't document formal rate limits, but large requests (500+ items) can be slow.
 - **Action:** Use pagination (`?X-Plex-Container-Start=0&X-Plex-Container-Size=100`) for large libraries.
 - **References:** Plex API docs (unofficial), forum posts about slow `/library/sections` calls.
-- **Status:** Not yet implemented; add to BACKLOG if users report slowness.
+- **Status:** Implemented in `plex_client.py`.
 
 ### I002: Seed-based shuffle reproducibility
 - **Date:** 2026-01-06
@@ -184,14 +228,20 @@ This file captures design decisions, investigations, and gotchas so agents don't
 ### G005: Plex /identity response formats vary
 - **Issue:** Some Plex servers return `machineIdentifier` on the root `<MediaContainer>` without a `<Server>` child.
 - **Workaround:** Accept `machineIdentifier` from either the root element or the `<Server>` element.
+
+---
+
+## Agent Acknowledgements
+
+- 2026-01-08: Agent GitHub Copilot acknowledged AGENTS.md.
 - **Impact:** Playlist creation fails if client only checks for `<Server>` (no machine identifier).
 - **Status:** Implemented in `plex_client.py` (root + Server fallback).
 
 ### G006: CLI run loops when schedule interval is set
-- **Issue:** `run` continues looping if `schedule.interval_minutes` > 0, even without `--loop`.
-- **Workaround:** Use `--once` or set `schedule.interval_minutes` to `0` for single runs.
-- **Impact:** `run` may not exit as README implies; can look like a hang after first run.
-- **Status:** Observed during validation; needs decision on intended behavior.
+- **Issue:** `run` continued looping if `schedule.interval_minutes` > 0, even without `--loop`.
+- **Workaround:** *(no longer needed)*
+- **Impact:** Confusing behavior (looked like a hang after first run).
+- **Status:** Fixed (CLI now only loops when `--loop` is set).
 
 ---
 
@@ -199,6 +249,9 @@ This file captures design decisions, investigations, and gotchas so agents don't
 
 *(Agents: add a timestamped entry here when you read AGENTS.md for the first time in a session.)*
 
+- **2026-01-07:** Agent Codex acknowledged AGENTS.md on 2026-01-07.
+- **2026-01-07:** Agent GitHub Copilot acknowledged AGENTS.md on 2026-01-07.
+- **2026-01-07:** Agent Codex acknowledged AGENTS.md on 2026-01-07 (web facets session).
 - **2026-01-07:** Agent Codex acknowledged AGENTS.md on 2026-01-07.
 - **2026-01-07:** Agent Codex acknowledged AGENTS.md on 2026-01-07.
 - **2026-01-07:** Agent Codex acknowledged AGENTS.md on 2026-01-07.
