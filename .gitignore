@@ -7,5 +7,10 @@ config.json
 plex_shuffler_web.log
 .pytest_cache/
 
+.venv/
+*.egg-info/
+dist/
+build/
+
 __pycache__/
 *.pyc

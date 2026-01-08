@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plex-shuffler-studio"
+dynamic = ["version"]
+description = "A fast, configurable playlist builder for Plex that shuffles shows while keeping episode order intact."
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["plex", "playlist", "shuffle"]
+authors = [{ name = "acaradonna" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+]
+
+[project.scripts]
+plex-shuffler-studio = "plex_shuffler.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "plex_shuffler.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["plex_shuffler*"]
+
+[tool.setuptools.package-data]
+plex_shuffler = ["web/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
