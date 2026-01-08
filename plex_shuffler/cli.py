@@ -52,6 +52,7 @@ def main() -> int:
         base_url=plex_cfg["url"],
         token=plex_cfg["token"],
         timeout=int(plex_cfg.get("timeout_seconds", 30) or 30),
+        client_identifier=(plex_cfg.get("client_id") or "plex-shuffler-studio").strip() or "plex-shuffler-studio",
     )
 
     if args.command == "libraries":
@@ -92,7 +93,16 @@ def main() -> int:
                         chunk_size=int(output_cfg.get("chunk_size", 200) or 200),
                     )
 
-        if args.once or (not args.loop and interval <= 0):
+        if not args.loop:
+            if interval > 0 and not args.once:
+                LOGGER.info(
+                    "Schedule interval is set (%s minutes) but --loop was not provided; running once.",
+                    interval,
+                )
+            run_once()
+            return 0
+
+        if args.once or interval <= 0:
             run_once()
             return 0
 
