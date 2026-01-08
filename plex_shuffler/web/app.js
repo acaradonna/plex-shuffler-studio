@@ -84,6 +84,8 @@ const showToast = (message) => {
   showToast._timer = setTimeout(() => toast.classList.remove("show"), 2600);
 };
 
+const QUERY_OPTIONS_LIMIT = 50;
+
 const setButtonBusy = (button, busy, label) => {
   if (!button) {
     return;
@@ -164,18 +166,20 @@ const parseQueryString = (query) => {
   const clauses = [];
   const index = new Map();
   for (const [rawKey, rawValue] of params.entries()) {
-    const key = String(rawKey || "").trim();
+    const { field, op } = parseKeyOperator(rawKey);
+    const key = String(field || "").trim();
     const value = String(rawValue || "").trim();
     if (!key) {
       continue;
     }
-    if (!index.has(key)) {
-      const clause = { field: key, op: "eq", values: [] };
-      index.set(key, clause);
+    const mapKey = `${key}:${op}`;
+    if (!index.has(mapKey)) {
+      const clause = { field: key, op, values: [] };
+      index.set(mapKey, clause);
       clauses.push(clause);
     }
     if (value) {
-      index.get(key).values.push(value);
+      index.get(mapKey).values.push(value);
     }
   }
   return { mode: "builder", groups: [{ clauses }], advanced_query: "" };
@@ -190,11 +194,12 @@ const serializeQueryState = (queryState) => {
   groups.forEach((group) => {
     const clauses = Array.isArray(group?.clauses) ? group.clauses : [];
     clauses.forEach((clause) => {
-      const key = String(clause.field || "").trim();
+      const field = String(clause.field || "").trim();
       const values = Array.isArray(clause.values) ? clause.values : [];
-      if (!key) {
+      if (!field) {
         return;
       }
+      const key = applyOperatorToKey(field, clause.op);
       values.forEach((value) => {
         const trimmed = String(value || "").trim();
         if (trimmed) {
@@ -227,6 +232,34 @@ const getQueryGroup = (queryState) => {
 const getCatalogFields = () => (Array.isArray(state.queryCatalog) ? state.queryCatalog : []);
 
 const getCatalogField = (key) => getCatalogFields().find((field) => field.key === key);
+
+const operatorLabels = {
+  eq: "is",
+  contains: "contains",
+  gte: "at least",
+  lte: "at most",
+};
+
+const parseKeyOperator = (rawKey) => {
+  const key = String(rawKey || "").trim();
+  if (key.endsWith(">")) {
+    return { field: key.slice(0, -1), op: "gte" };
+  }
+  if (key.endsWith("<")) {
+    return { field: key.slice(0, -1), op: "lte" };
+  }
+  return { field: key, op: "eq" };
+};
+
+const applyOperatorToKey = (field, op) => {
+  if (op === "gte") {
+    return `${field}>`;
+  }
+  if (op === "lte") {
+    return `${field}<`;
+  }
+  return field;
+};
 
 const api = async (path, options = {}) => {
   const response = await fetch(path, {
@@ -495,6 +528,28 @@ const renderQueryBuilder = (sectionKey) => {
     const valuesCell = document.createElement("div");
     valuesCell.className = "query-values";
 
+    const ops = !isCustom && Array.isArray(fieldDef.ops) ? fieldDef.ops : [];
+    if (!isCustom && ops.length) {
+      if (!ops.includes(clause.op)) {
+        clause.op = ops[0];
+      }
+      if (ops.length > 1) {
+        const opSelect = document.createElement("select");
+        opSelect.className = "query-op";
+        ops.forEach((op) => {
+          const option = document.createElement("option");
+          option.value = op;
+          option.textContent = operatorLabels[op] || op;
+          opSelect.appendChild(option);
+        });
+        opSelect.value = clause.op;
+        opSelect.addEventListener("change", (event) => {
+          clause.op = event.target.value;
+        });
+        valuesCell.appendChild(opSelect);
+      }
+    }
+
     if (isCustom) {
       const textarea = document.createElement("textarea");
       textarea.rows = 2;
@@ -651,14 +706,14 @@ const loadQueryOptions = async (sectionKey) => {
   if (!catalog.length) {
     return;
   }
-  const mediaType = sectionKey === "tv" ? "show" : "movie";
+  const mediaType = "both";
   let hadError = false;
   const results = await Promise.all(
     catalog.map(async (field) => {
       const source = String(field.options_source || "").replace("plex:", "");
       const url = `/api/plex/options?library=${encodeURIComponent(library)}&source=${encodeURIComponent(
         source,
-      )}&media_type=${encodeURIComponent(mediaType)}`;
+      )}&media_type=${encodeURIComponent(mediaType)}&limit=${QUERY_OPTIONS_LIMIT}`;
       try {
         const data = await api(url);
         return { key: field.key, options: data.options || [], error: null };

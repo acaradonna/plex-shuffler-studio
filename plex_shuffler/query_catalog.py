@@ -52,7 +52,7 @@ QUERY_FIELD_CATALOG_V1: tuple[QueryField, ...] = (
         key="year",
         label="Year",
         input_kind="number",
-        ops=("eq",),
+        ops=("eq", "gte", "lte"),
         validation="verified",
     ),
     QueryField(
@@ -84,7 +84,7 @@ QUERY_FIELD_CATALOG_V1: tuple[QueryField, ...] = (
         label="Title contains",
         input_kind="text",
         ops=("contains",),
-        validation="pending",
+        validation="verified",
     ),
     QueryField(
         key="summary",
@@ -98,7 +98,7 @@ QUERY_FIELD_CATALOG_V1: tuple[QueryField, ...] = (
         label="Actor",
         input_kind="multiselect",
         ops=("eq",),
-        validation="pending",
+        validation="verified",
         options_source="plex:actor",
     ),
     QueryField(
@@ -106,7 +106,7 @@ QUERY_FIELD_CATALOG_V1: tuple[QueryField, ...] = (
         label="Director",
         input_kind="multiselect",
         ops=("eq",),
-        validation="pending",
+        validation="verified",
         options_source="plex:director",
     ),
 )
@@ -133,3 +133,10 @@ def plex_option_sources() -> set[str]:
         if field.options_source.startswith("plex:"):
             sources.add(field.options_source.split(":", 1)[1])
     return sources
+
+
+def default_op_for_field(key: str) -> str:
+    for field in QUERY_FIELD_CATALOG_V1:
+        if field.key == key:
+            return field.ops[0]
+    return "eq"

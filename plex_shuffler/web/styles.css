@@ -356,6 +356,11 @@ body {
   margin-bottom: 0;
 }
 
+.query-op {
+  margin-bottom: 8px;
+  max-width: 160px;
+}
+
 .query-actions {
   display: flex;
   justify-content: flex-end;

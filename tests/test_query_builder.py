@@ -46,6 +46,37 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertEqual(clause_year.field, "year")
         self.assertEqual(clause_year.values, ["2020"])
 
+    def test_parse_title_defaults_contains(self):
+        state = parse_query_string("title=Kung Fu")
+        clause = state.groups[0].clauses[0]
+        self.assertEqual(clause.field, "title")
+        self.assertEqual(clause.op, "contains")
+
+    def test_parse_year_range_ops(self):
+        state = parse_query_string("year>=2010&year<=2020")
+        clauses = state.groups[0].clauses
+        self.assertEqual(clauses[0].field, "year")
+        self.assertEqual(clauses[0].op, "gte")
+        self.assertEqual(clauses[0].values, ["2010"])
+        self.assertEqual(clauses[1].field, "year")
+        self.assertEqual(clauses[1].op, "lte")
+        self.assertEqual(clauses[1].values, ["2020"])
+
+    def test_serialize_year_range_ops(self):
+        state = QueryState(
+            mode="builder",
+            groups=[
+                Group(
+                    clauses=[
+                        Clause(field="year", op="gte", values=["2010"]),
+                        Clause(field="year", op="lte", values=["2020"]),
+                    ]
+                )
+            ],
+            advanced_query="",
+        )
+        self.assertEqual(serialize_query_state(state), "year%3E=2010&year%3C=2020")
+
     def test_parse_interleaved_duplicates_uses_first_seen_order(self):
         state = parse_query_string("genre=Animation&year=2020&genre=Comedy")
         self.assertEqual(serialize_query_state(state), "genre=Animation&genre=Comedy&year=2020")

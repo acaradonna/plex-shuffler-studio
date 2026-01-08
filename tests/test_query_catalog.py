@@ -8,12 +8,13 @@ class QueryCatalogTests(unittest.TestCase):
         keys = {field["key"] for field in catalog_for_api()}
         self.assertIn("genre", keys)
         self.assertIn("unwatched", keys)
-        self.assertNotIn("title", keys)
+        self.assertIn("title", keys)
 
     def test_known_field_keys_matches_verified(self):
         known = known_field_keys()
         self.assertIn("collection", known)
         self.assertIn("contentRating", known)
+        self.assertIn("title", known)
         self.assertNotIn("summary", known)
 
     def test_option_sources_include_verified_fields(self):

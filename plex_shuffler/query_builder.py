@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import parse_qsl, urlencode
 
-from plex_shuffler.query_catalog import known_field_keys
+from plex_shuffler.query_catalog import default_op_for_field, known_field_keys
 
 QueryMode = Literal["builder", "advanced"]
 ClauseOp = Literal["eq", "contains", "gte", "lte", "exists", "custom"]
@@ -64,7 +64,10 @@ def serialize_query_state(state: QueryState) -> str:
     pairs: list[tuple[str, str]] = []
     for group in state.groups:
         for clause in group.clauses:
-            key = (clause.field or "").strip()
+            field_name = (clause.field or "").strip()
+            if not field_name:
+                continue
+            key = _serialize_key(field_name, clause.op)
             values = clause.values if clause.values is not None else []
             for value in values:
                 pairs.append((key, str(value).strip()))
@@ -110,6 +113,14 @@ def query_state_from_dict(data: dict[str, Any] | None) -> QueryState:
     return QueryState(mode=mode, groups=groups, advanced_query=str(advanced_query).strip())
 
 
+def _serialize_key(field_name: str, op: ClauseOp) -> str:
+    if op == "gte":
+        return f"{field_name}>"
+    if op == "lte":
+        return f"{field_name}<"
+    return field_name
+
+
 def query_state_to_dict(state: QueryState) -> dict[str, Any]:
     return {
         "mode": state.mode,
@@ -126,6 +137,26 @@ def query_state_to_dict(state: QueryState) -> dict[str, Any]:
     }
 
 
+def _normalize_clause_key(raw_key: str, known_fields: set[str]) -> tuple[str, ClauseOp, bool]:
+    key = (raw_key or "").strip()
+    if not key:
+        return "", "custom", True
+    if key.endswith(">"):
+        base = key[:-1].strip()
+        if base in known_fields:
+            return base, "gte", False
+        return key, "custom", True
+    if key.endswith("<"):
+        base = key[:-1].strip()
+        if base in known_fields:
+            return base, "lte", False
+        return key, "custom", True
+    if key in known_fields:
+        op = default_op_for_field(key)
+        return key, op if op in _ALLOWED_OPS else "eq", False
+    return key, "custom", True
+
+
 def _pairs_to_clauses(
     pairs: list[tuple[str, str]],
     known_fields: set[str],
@@ -134,15 +165,14 @@ def _pairs_to_clauses(
     index: dict[tuple[str, str], Clause] = {}
     has_unknown = False
     for raw_key, raw_value in pairs:
-        key = (raw_key or "").strip()
+        field_name, op, unknown = _normalize_clause_key(raw_key, known_fields)
         value = (raw_value or "").strip()
-        op: ClauseOp = "eq" if key in known_fields else "custom"
-        if op == "custom":
+        if unknown:
             has_unknown = True
-        clause_key = (key, op)
+        clause_key = (field_name, op)
         clause = index.get(clause_key)
         if clause is None:
-            clause = Clause(field=key, op=op, values=[])
+            clause = Clause(field=field_name, op=op, values=[])
             index[clause_key] = clause
             clauses.append(clause)
         clause.values.append(value)
